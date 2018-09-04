@@ -7,7 +7,7 @@ import 'openzeppelin-solidity/contracts/ownership/Ownable.sol';
 import "openzeppelin-solidity/contracts/token/ERC721/ERC721Receiver.sol";
 import '../consortium/DepositHandler.sol';
 
-contract DiamondRegistry is ERC721Basic, Ownable {
+contract ERC721DiamondRegistry is ERC721Basic, Ownable {
   using SafeMath for uint256;
   using AddressUtils for address;
 
