@@ -54,24 +54,23 @@ class registrynft: public contract {
                 const uint16_t price_per_centicaratx100);
     
     // @abi action
-    void issue(const account_name issuer, 
-                        const account_name registrant,
-                        const uint64_t report_num,
-                        const string name,
-                        const string lab,
-                        const string shape_and_cutting_style,
-                        const uint16_t heightx100,
-                        const uint16_t widthx100,
-                        const uint16_t lengthx100,
-                        const uint16_t centicarat,
-                        const string color_grade,
-                        const string clarity_grade,
-                        const string cut_grade,
-                        const string polish,
-                        const string symmetry,
-                        const string flourescence,
-                        const asset qty,
-                        const string urs);
+    void issue(const account_name registrant,
+                const uint64_t report_num,
+                const string name,
+                const string lab,
+                const string shape_and_cutting_style,
+                const uint16_t heightx100,
+                const uint16_t widthx100,
+                const uint16_t lengthx100,
+                const uint16_t centicarat,
+                const string color_grade,
+                const string clarity_grade,
+                const string cut_grade,
+                const string polish,
+                const string symmetry,
+                const string flourescence,
+                const asset qty,
+                const string urs);
 
       // @abi action
       void transfer(account_name from, account_name to, uint64_t report_num, string memo);
@@ -105,14 +104,14 @@ class registrynft: public contract {
       
         
   private:
-    enum reg_status
+    enum
     {
           PENDING,
           CREATED,
-          FINALIZED
+          ISSUED
     };
 
-    reg_status registry_status;
+    int registry_status;
 
     // @abi table configs i64
     struct config {
@@ -173,7 +172,8 @@ class registrynft: public contract {
     typedef multi_index<N(diamonds), diamond> diamond_table;
 
     //
-    using account_index = eosio::multi_index<N(accounts), account>;
+    //using account_index = eosio::multi_index<N(accounts), account>;
+    typedef eosio::multi_index<N(accounts), account> account_index;
 
     using currency_index = eosio::multi_index<N(stat), stats, indexed_by<N(byissuer), const_mem_fun<stats, account_name, &stats::get_issuer>>>;
 
