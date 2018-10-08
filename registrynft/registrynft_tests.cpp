@@ -83,19 +83,7 @@ class registrynft_tester: public tester {
         }
 
 	    //
-        action_result addconfig(const account_name   payment_token,
-                                const string         symbol,
-                                const uint8_t        precision,
-                                const uint16_t       price_per_centicaratx100) 
-        {
-            return push_action(  N(registrynft), N(addconfig), mvo()
-                ("payment_token", payment_token)
-                ("symbol", symbol)
-                ("precision", precision)
-                ("price_per_centicaratx100", price_per_centicaratx100)
-            );
 
-        }
         //
 
         action_result create(const account_name issuer, 
@@ -156,19 +144,6 @@ class registrynft_tester: public tester {
 
 
 BOOST_AUTO_TEST_SUITE(registrynft_tests)
-
-    BOOST_FIXTURE_TEST_CASE(addconfig_tests, registrynft_tester) try {
-        account_name payment_token = "bcdu";
-        string symbol = "BCDU";
-        uint8_t precision = 6;
-        uint16_t price_per_cc = 85;
-        //
-        produce_blocks(1);
-        //
-        BOOST_REQUIRE_EQUAL( success(), addconfig( N(payment_token), symbol, precision, price_per_cc) );
-        
-    }FC_LOG_AND_RETHROW()
-
     
     BOOST_FIXTURE_TEST_CASE(create_tests, registrynft_tester) try {
         account_name from = "registry";
