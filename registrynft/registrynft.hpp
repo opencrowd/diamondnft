@@ -10,6 +10,7 @@
 #include <eosiolib/symbol.hpp>
 #include <eosiolib/crypto.h>
 #include <string>
+//#include <bcdutoken.hpp>
 
 
 using namespace eosio;
@@ -22,10 +23,13 @@ namespace eosiosystem
   class system_contract;
 }
 
+// bcdu token forward class decl.
+//class bcdutoken;
+
 class registrynft: public contract {
   public:
     registrynft(account_name self):contract(self), registry_status{PENDING} {}
-    //~registrynft(){}
+    ~registrynft(){}
 
     // @abi action
     void addclaritych ( const uint64_t        report_num,
@@ -39,19 +43,11 @@ class registrynft: public contract {
     void addcomment   ( const uint64_t        report_num,
                         const string          comment);
 
-    // @abi action
-    void addconfig    ( const account_name    payment_token,
-                        const string          symbol,
-                        const uint8_t         precision,
-                        const uint16_t        price_per_centicaratx100);
-
 
     // @abi action
     void create(const account_name issuer, 
-                string symb,
-                const account_name payment_token,
-                const uint8_t  precision,
-                const uint16_t price_per_centicaratx100);
+                const string symb,
+                const uint16_t price_per_centicarat);
     
     // @abi action
     void issue(const account_name registrant,
@@ -73,20 +69,23 @@ class registrynft: public contract {
                 const string urs);
 
       // @abi action
-      void transfer(account_name from, account_name to, uint64_t report_num, string memo);
+      void transfer(account_name from, account_name to, uint64_t report_num, asset quantity, string memo);
+
       // @abi action
       void burn(const account_name owner, const uint64_t report_num);
-      // @abi action
+      
+      
       void setrampayer(account_name payer, uint64_t report_num);
       
-      //void transferReceived(const currency::transfer &transfer, const account_name code);
+      void transferReceived(const currency::transfer &transfer, const account_name code);
       
-      void apply(const account_name contract, const account_name act);
+      void apply(const account_name contract, const account_name action);
 
       // @abi table accounts i64
       struct account
       {
           asset balance;
+          account_name token_contract;
           uint64_t primary_key() const {return balance.symbol.name();}
       };
 
@@ -95,35 +94,25 @@ class registrynft: public contract {
       {
           asset supply;
           account_name issuer;
+          uint16_t price_per_centicarat;
           //
           uint64_t primary_key() const {return supply.symbol.name();}
           account_name get_issuer() const {return issuer;}
+          asset get_supply() const {return supply;}
       };
-      //
-
-      
-        
+      //        
   private:
     enum
     {
-          PENDING,
+          PENDING = 1,
           CREATED,
-          ISSUED
+          ISSUED,
+          TRANSFER,
+          TRANSFERRED,
+          FINALIZED
     };
 
     int registry_status;
-
-    // @abi table configs i64
-    struct config {
-      uint64_t          config_id;
-      account_name      payment_token;
-      symbol_type       payment_symbol;
-      uint16_t          price_per_centicaratx100;
-      uint64_t  primary_key () const { return config_id; }
-      EOSLIB_SERIALIZE (config, (config_id)(payment_token)(payment_symbol)(price_per_centicaratx100))
-    };
-
-    typedef multi_index<N(configs), config> config_table;
 
     // @abi table diamonds i64
     struct diamond {
@@ -191,7 +180,5 @@ class registrynft: public contract {
     void sub_supply(asset quantity);
     void add_supply(asset quantity);
     void mint(account_name owner, account_name ram_payer, asset value, string uri, string name);
-
-
-  
+ 
 };
