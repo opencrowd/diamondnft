@@ -27,6 +27,16 @@ namespace eosiosystem
 //class bcdutoken;
 
 class registrynft: public contract {
+
+    struct withdraw
+    {
+        uint64_t user;
+        symbol_name wd_symbol;
+        //
+        withdraw(): user{0}, wd_symbol{string_to_symbol(0, "BCDU")} {}
+        ~withdraw() {}
+    };
+
   public:
     registrynft(account_name self):contract(self), registry_status{PENDING} {}
     ~registrynft(){}
@@ -77,7 +87,8 @@ class registrynft: public contract {
       
       void setrampayer(account_name payer, uint64_t report_num);
       
-      void transferReceived(const currency::transfer &transfer, const account_name code);
+      void apply_transfer(const currency::transfer &transfer, const account_name code);
+      void apply_withdrawal(const withdraw& withdrawal, const account_name code);
       
       void apply(const account_name contract, const account_name action);
 
@@ -100,7 +111,8 @@ class registrynft: public contract {
           account_name get_issuer() const {return issuer;}
           asset get_supply() const {return supply;}
       };
-      //        
+      //   
+   
   private:
     enum
     {

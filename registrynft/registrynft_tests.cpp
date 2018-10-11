@@ -8,6 +8,7 @@
 
 #include <Runtime/Runtime.h>
 #include <fc/variant_object.hpp>
+#include <string.h>
 
 
 
@@ -25,16 +26,16 @@ typedef string uri_type;
 class registrynft_tester: public tester {
     public:
         registrynft_tester(){
-            //produce_blocks(1);
+            produce_blocks(2);
             //
-            //create_accounts({N(dmd.user1), N(dmd.user2), N(dmd.user3)} );
+            create_accounts({ N(test1), N(test2), N(bcdutoken), N(registrynft) } );
             //
-            produce_blocks(1);
+            produce_blocks(2);
             //
-            set_code( N(registrynft), registrynft_wast );
-            set_abi( N(registrynft), registrynft_abi );
+            set_code( N(registrynft), registrynft_wast);
+            set_abi( N(registrynft), registrynft_abi);
             //
-            produce_blocks(1);
+            produce_blocks();
             //
             const auto& accnt = control->db().get<account_object, by_name>(N(registrynft));
             abi_def abi;
@@ -50,7 +51,7 @@ class registrynft_tester: public tester {
 	    {   
       	    string action_type_name = abi_ser.get_action_type(name);
       	    action act;
-      	    act.account = N(registrynft);
+            act.account = N(registrynft);
       	    act.name    = name;
       	    act.data    = abi_ser.variant_to_binary( action_type_name, data, abi_serializer_max_time );
             return base_tester::push_action( std::move(act), uint64_t(signer));
@@ -62,7 +63,7 @@ class registrynft_tester: public tester {
             auto symb = eosio::chain::symbol::from_string(symbolname);
             auto symbol_code = symb.to_symbol_code().value;
             vector<char> data = get_row_by_account(N(registrynft), symbol_code, N(stat), symbol_code);
-            return data.empty() ? fc::variant() : abi_ser.binary_to_variant("stats", data, abi_serializer_max_time);
+            return data.empty() ? fc::variant() : abi_ser.binary_to_variant("stat", data, abi_serializer_max_time);
 
         }
 
@@ -71,7 +72,7 @@ class registrynft_tester: public tester {
             auto symb = eosio::chain::symbol::from_string(symbolname);
             auto symbol_code = symb.to_symbol_code().value;
             vector<char> data = get_row_by_account(N(registrynft), acc, N(accounts), symbol_code);
-            return data.empty() ? fc::variant(): abi_ser.binary_to_variant( "account", data, abi_serializer_max_time);
+            return data.empty() ? fc::variant(): abi_ser.binary_to_variant( "accounts", data, abi_serializer_max_time);
 
         }
 
@@ -86,12 +87,12 @@ class registrynft_tester: public tester {
 
         action_result create(const account_name issuer, 
                              string symb,                            
-                             const uint16_t price_per_centicaratx100)
+                             const uint16_t price_per_centicarat)
         {
             return push_action( N(registrynft), N(create), mvo()
                 ("issuer", issuer)                
                 ("symb", symb)
-                ("price_per_centicaratx100", price_per_centicaratx100)
+                ("price_per_centicarat", price_per_centicarat)
             );
         }
         //
@@ -113,6 +114,7 @@ class registrynft_tester: public tester {
                             const asset qty,
                             const string urs)
         {
+
                 return push_action( N(registrynft), N(issue), mvo()
                     ("registrant", registrant)
                     ("report_num", report_num)
@@ -157,21 +159,25 @@ BOOST_AUTO_TEST_SUITE(registrynft_tests)
     
     BOOST_FIXTURE_TEST_CASE(create_tests, registrynft_tester) try {
         account_name issuer     = "registrynft";
-        string symbol           = "BCDU";
-        uint16_t price_per_cc   = 85;
+        uint16_t price_per_cc   = 199;
         //
         produce_blocks(1);
         //
         BOOST_REQUIRE_EQUAL(success(), 
-            create( N(issuer), symbol, price_per_cc));
+            create( issuer, test_symbol, price_per_cc));
 
     }FC_LOG_AND_RETHROW()
 
 
     BOOST_FIXTURE_TEST_CASE(issue_tests, registrynft_tester) try {
 
+        account_name registrant = "registrynft";
+        string  test_symbol     = "BCDU";
+        uint16_t test_price_per_cc  = 299;
+        //
+        auto newtoken = create( registrant, test_symbol, test_price_per_cc);
+
         // Setup Input Parameters
-        account_name registrant = "bcdutoken";
         uint64_t report_num = 499535;
         string name = "wedding diamonds";
         string lab = "gia";
@@ -186,28 +192,57 @@ BOOST_AUTO_TEST_SUITE(registrynft_tests)
         string polish = "Excellent";
         string symmetry = "Excellent";
         string flourescence = "Clear";
-        string symb = "BCDU";
-        int64_t precision = 0;
-        asset quantity( precision, symbol(0,"BCDU"));
+        //int64_t amount = 299;
+        //asset quantity( amount, symbol(0,"BCDU"));
         string urs = "push action test1";
         //
-        produce_blocks(1);
+        //produce_blocks(1);
         //
         BOOST_REQUIRE_EQUAL(success(),
-                    issue( N(registrant), report_num, name, lab, shape_and_cutting_style, heightx100, 
+                    issue( registrant, report_num, name, lab, shape_and_cutting_style, heightx100, 
                     widthx100, lengthx100, centicarat, color_grade, clarity_grade, cut_grade, polish, 
-                    symmetry, flourescence, quantity, urs));
+                    symmetry, flourescence, asset::from_string("299 BCDU"), urs));
     }FC_LOG_AND_RETHROW()
     
 
     BOOST_FIXTURE_TEST_CASE(transfer_tests, registrynft_tester) try {
+
+        account_name registrant = "registrynft";
+        string  test_symbol     = "BCDU";
+        uint16_t test_price_per_cc  = 399;
+        auto newtoken = create( registrant, test_symbol, test_price_per_cc);
+        //
+        //produce_blocks(1);
+
+        // Setup Input Parameters
+        uint64_t report_num = 699202;
+        string name = "wedding diamonds";
+        string lab = "gia";
+        string shape_and_cutting_style = "triangle";
+        uint16_t heightx100 = 300;
+        uint16_t widthx100 = 157;
+        uint16_t lengthx100 = 123;
+        uint16_t centicarat = 15;
+        string color_grade = "Green";
+        string clarity_grade = "CLEAR";
+        string cut_grade = "Excellent";
+        string polish = "Excellent";
+        string symmetry = "Excellent";
+        string flourescence = "Clear";
+        //int64_t amount = 299;
+        //asset quantity( amount, symbol(0,"BCDU"));
+        string urs = "push action test1";
+
+
+        auto result =  issue( registrant, report_num, name, lab, shape_and_cutting_style, heightx100, 
+                    widthx100, lengthx100, centicarat, color_grade, clarity_grade, cut_grade, polish, 
+                    symmetry, flourescence, asset::from_string("399 BCDU"), urs);
+
         account_name from = "registrynft";
         account_name to = "bcdutoken";
-        uint64_t report_num = 499535;
-        asset quantity(55, symbol(0, "BCDU"));
-        string memo("transfer_test testcase for 55 BCDU tokens");
+        string memo("transfer_test testcase for 99 BCDU tokens");
         //
-        BOOST_REQUIRE_EQUAL(success(), transfer(N(from), N(to), report_num, quantity, memo));
+        BOOST_REQUIRE_EQUAL(success(), transfer( from, to, report_num, asset::from_string("99 BCDU"), memo));
     }FC_LOG_AND_RETHROW()
 
 
