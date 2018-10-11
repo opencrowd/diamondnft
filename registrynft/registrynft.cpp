@@ -1,4 +1,6 @@
-#include <registrynft.hpp>
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+//#pragma once
+#include "registrynft.hpp"
 #include <iostream>
 #include <functional>
 #include <string>
@@ -7,28 +9,9 @@ using namespace std;
 using namespace eosio;
 
 
-void registrynft::addconfig (const account_name   payment_token,
-                             const string         symbol,
-                             const uint8_t        precision,
-                             const uint16_t       price_per_centicaratx100) 
-{
-
-   config_table c_t (_self, _self);
-   //
-   c_t.emplace (_self, [&](auto &c) {
-            c.config_id      = c_t.available_primary_key();
-            c.payment_token  = payment_token;
-            c.payment_symbol = string_to_symbol (precision, symbol.c_str());
-            c.price_per_centicaratx100 = price_per_centicaratx100;
-   });
-}
-
-
 void registrynft::create(const account_name issuer,
-                         string symb,
-                         const account_name payment_token,
-                         const uint8_t  precision,
-                         const uint16_t price_per_centicaratx100)
+                         const string symb,
+                         const uint16_t price_per_centicarat)
                          
 {
     require_auth(issuer);
@@ -48,24 +31,19 @@ void registrynft::create(const account_name issuer,
     currency_index currency_table(_self, symbol.name() );
     auto existing_currency = currency_table.find(symbol.name());
     eosio_assert(existing_currency == currency_table.end(), "token with symbol already exists");
-    
-    // Create registry config_table once only
-    config_table config(_self, _self);
-    auto c_itr = config.begin();
-    eosio_assert(c_itr != config.end(), "Registry configuration is not set!!");
     //
     // Create new currency
     currency_table.emplace(_self, [&](auto &currency){
         currency.supply = supply;
         currency.issuer = issuer;
+        currency.price_per_centicarat = price_per_centicarat;
     });
     registry_status = CREATED;
     print("\n");
     print("diamond created..."); 
 }
 
-void registrynft::issue(const account_name issuer, 
-                        const account_name registrant,
+void registrynft::issue(const account_name registrant, 
                         const uint64_t report_num,
                         const string name,
                         const string lab,
@@ -84,15 +62,18 @@ void registrynft::issue(const account_name issuer,
                         const string urs)
 {
     
-    require_auth(issuer);
+    require_auth(_self);
 
+    // Check if registrant account exists
+    eosio_assert(is_account(registrant), "registrant account does not exist!!");
+    
     vector<string> uris;
     uris.push_back(urs);
 
     // capture symbol
    
-    print("using asset-amount: ",qty.amount);
-    print("using asset-symbol: ",qty.symbol);
+    print("using asset-amount: ",qty.amount, "\n");
+    print("using asset-symbol: ",qty.symbol, "\n");
     symbol_type symbol = qty.symbol;
     //
     eosio_assert(qty.is_valid(), "invalid asset type");
@@ -101,20 +82,22 @@ void registrynft::issue(const account_name issuer,
     eosio_assert(name.size() > 0, "name is empty");
     eosio_assert(qty.amount > 0, "must issue positive quantities of NFTs");
 
-    //autenticate issuer authorizations and validate quantity
-    //require_auth(st.issuer);
-    //eosio_assert(qty.is_valid(), "invalid quantity");
-    
     diamond_table diamond(_self, _self);
     auto d_itr = diamond.find(report_num);
     eosio_assert(d_itr == diamond.end(), "Report number already exists.");
 
-    config_table config(_self, _self);
-    auto c_itr = config.begin();
-    eosio_assert(c_itr != config.end(), "Configuration is not set.");
-
-    print("qty-symbol: ",qty.symbol);
-
+    // ensure currecy instrument object has been created
+    auto symbol_name = symbol.name();
+    print("symbol_name: ", symbol_name, "\n");
+    currency_index currency_table(_self, symbol_name);
+    auto existing_currency = currency_table.find(symbol_name);
+    eosio_assert(existing_currency != currency_table.end(), "token with symbol does not exist, create token before issue");
+    const auto& st = *existing_currency;
+    eosio_assert(symbol == st.supply.symbol, "symbol precision mismatches!!");
+    //
+    // update registry status
+    registry_status = ISSUED;
+    //
     diamond.emplace(_self, [&](auto &d) {
         d.report_num = report_num;
         d.lab = lab;
@@ -134,25 +117,14 @@ void registrynft::issue(const account_name issuer,
         d.comments.push_back(string("NA"));
         d.registrant = registrant;
         d.registration_date = now();
-        //d.registration_cost = asset {c_itr->price_per_centicaratx100 * centicarat, c_itr->payment_symbol};
-        d.registration_cost = asset {c_itr->price_per_centicaratx100 * centicarat, qty.symbol};
+        d.registration_cost = asset {st.price_per_centicarat * centicarat, qty.symbol};
         d.name = name;
-        d.owner = issuer;
+        d.owner = _self;
         d.uri = urs;
         d.value = qty;
-        d.registration_status = CREATED;
+        d.registration_status = registry_status;
     });
-
-    // ensure currecy instrument object has been created
-    auto symbol_name = symbol.name();
-    print("symbol_name: ", symbol_name);
-    currency_index currency_table(_self, symbol_name);
-    auto existing_currency = currency_table.find(symbol_name);
-    eosio_assert(existing_currency != currency_table.end(), "token with symbol does not exist, create token before issue");
-    const auto& st = *existing_currency;
-    eosio_assert(symbol == st.supply.symbol, "symbol precision mismatches!!");
-
-    print("diamond created & registered ");
+    //
 
     // increase supply
     add_supply(qty);
@@ -165,12 +137,53 @@ void registrynft::issue(const account_name issuer,
        mint(registrant, st.issuer, asset{1,symbol}, uri, name);
 
     // Add balance to account
-    add_balance(registrant, qty, issuer);
+    add_balance(registrant, qty, st.issuer);
 
-    print("\n");
-    print("Asset(diamond) issued, registration status: ", "CREATED");
+    eosio_assert(registry_status == ISSUED, "diamond registration status is not ISSUED!!");
+    print("Diamond asset issued & Registered...", "\n"); 
+    print("Registration Status: ", registry_status, "\n");
 }
 
+
+void registrynft::transfer(account_name from, account_name to, uint64_t report_num, asset quantity, string memo)
+{
+
+    print("registrynft:transfer() received", "\n");
+
+    // Ensure authorized to send from account
+    eosio_assert(from != to, "cannot transfer to self");
+    require_auth(from);
+
+    // Ensure 'to' account exists
+    eosio_assert(is_account(to), "to account does not exist");
+
+    // Check memo size and print
+    eosio_assert(memo.size() <= 256, "memo has more than 256 bytes");
+
+    // Ensure token ID exists
+    diamond_table diamond(_self, _self);
+    auto sender_token = diamond.find(report_num);
+    const auto &st = *sender_token;
+    eosio_assert(sender_token != diamond.end(), "token with specified ID does not exist");
+    eosio_assert(sender_token->owner == from, "sender does not own token with specified ID");
+    //
+    print("sender-token-name:", st.name, "\n");
+    print("sender-token-value", st.value.symbol, "\n");
+    print("sender-token-value", st.value.amount, "\n");
+
+    // Notify both recipients
+    require_recipient(from);
+    require_recipient(to);
+
+    // Transfer NFT from sender to receiver
+    diamond.modify(st, from, [&](auto &d) {
+        d.owner = to;
+    });
+
+    // Change balance of both accounts
+    sub_balance(from, quantity);
+    add_balance(to, quantity, from);
+}
 
 
 void registrynft::burn(const account_name owner, const uint64_t report_num)
@@ -179,16 +192,16 @@ void registrynft::burn(const account_name owner, const uint64_t report_num)
 
     // Find diamond to burn
     //auto burn_diamond = diamonds.find(report_num);
-    diamond_table diamond(_self, _self);
-    auto burn_diamond = diamond.find(report_num);
-    eosio_assert(burn_diamond != diamond.end(), "diamond with report-num does not exist!!");
+    diamond_table diamonds(_self, _self);
+    auto burn_diamond = diamonds.find(report_num);
+    eosio_assert(burn_diamond != diamonds.end(), "diamond with report-num does not exist!!");
     eosio_assert(burn_diamond->owner == owner,  "diamond not owned by account!!");
 
-    //asset burnt_supply = burn_token->value;
-    asset burnt_supply;
+    asset burnt_supply = burn_diamond->value;
+    //asset burnt_supply;
 
     // remove tokens from table
-    diamond.erase(burn_diamond);
+    diamonds.erase(burn_diamond);
 
     // lower balance from owner
     sub_balance(owner, burnt_supply);
@@ -224,8 +237,6 @@ void registrynft::setrampayer(account_name payer, uint64_t report_num)
     });
 }
 
-
-
 void registrynft::mint(account_name owner, account_name ram_payer, asset value, string uri, string name)
 {
 
@@ -242,46 +253,6 @@ void registrynft::mint(account_name owner, account_name ram_payer, asset value, 
         d.name = name;
     }); 
 }
-
-
-                                                 
-void registrynft::transfer(account_name from, account_name to, uint64_t report_num, string memo)
-{
-    // Ensure authorized to send from account
-    eosio_assert(from != to, "cannot transfer to self");
-    require_auth(from);
-
-    // Ensure 'to' account exists
-    eosio_assert(is_account(to), "to account does not exist");
-
-    // Check memo size and print
-    eosio_assert(memo.size() <= 256, "memo has more than 256 bytes");
-
-    // Ensure token ID exists
-    diamond_table diamond(_self, _self);
-    auto sender_token = diamond.find(report_num);
-    eosio_assert(sender_token != diamond.end(), "token with specified ID does not exist");
-
-    // Ensure owner owns token
-    eosio_assert(sender_token->owner == from, "sender does not own token with specified ID");
-
-    const auto &st = *sender_token;
-
-    // Notify both recipients
-    require_recipient(from);
-    require_recipient(to);
-
-    // Transfer NFT from sender to receiver
-    diamond.modify(st, from, [&](auto &d) {
-        d.owner = to;
-    });
-
-    // Change balance of both accounts
-    sub_balance(from, st.value);
-    add_balance(to, st.value, from);
-
-}
-
 
 void registrynft::addclaritych(const uint64_t report_num,
                             const string clarity_characteristic)
@@ -334,14 +305,14 @@ void registrynft::add_balance(account_name owner, asset value, account_name ram_
     //
     if (to == to_accounts.end())
     {
-        print("Adding to Balance, Value: ", value);
+        print("Adding to Balance, Value: ", value, "\n");
         to_accounts.emplace(ram_payer, [&](auto &a) {
             a.balance = value;
         });
     }
     else
     {
-        print("Accruing Balance with value: ", value);
+        print("Accruing Balance with value: ", value, "\n");
         to_accounts.modify(to, 0, [&](auto &a) {
             a.balance += value;
         });
@@ -351,10 +322,11 @@ void registrynft::add_balance(account_name owner, asset value, account_name ram_
 
 void registrynft::sub_balance(account_name owner, asset value)
 {
-    print("Symbol-Name: ", value.symbol.name());
+    print("symbol-name: ", value.symbol.name(), "\n");
+    print("symbol-value:", value.amount, "\n");
     //
     account_index from_acnts(_self, owner);
-    const auto &from = from_acnts.get(value.symbol.name(), "no balance object found");
+    const auto& from = from_acnts.get(value.symbol.name(), "no balance object found");
     eosio_assert(from.balance.amount >= value.amount, "overdrawn balance");
 
     if (from.balance.amount == value.amount)
@@ -386,7 +358,7 @@ void registrynft::add_supply(asset quantity)
     auto symbol_name = quantity.symbol.name();
     currency_index currency_table(_self, symbol_name);
     auto current_currency = currency_table.find(symbol_name);
-    print("symbol-name is: ", symbol_name);
+    print("symbol-name is: ", symbol_name, "\n");
     eosio_assert(current_currency != currency_table.end(), "currency not found for symbol-name");
 
     currency_table.modify(current_currency, 0, [&](auto &currency) {
@@ -395,76 +367,148 @@ void registrynft::add_supply(asset quantity)
 }
 
 
-// void registrynft::apply(const account_name contract, const account_name act)
-// {
+void registrynft::apply(const account_name contract, const account_name action_type)
+{
+    auto &thiscontract = *this;
+    switch(action_type)
+    {
+        case N(create):
+            print("apply::create()", "\n");
+            switch(action_type)
+            {
+                EOSIO_API(registrynft, (create)(issue)(transfer)(addclaritych)(addinscript)(addcomment))
+            };
+        break;
+        //
+        case N(issue):
+            print("apply::issue():", "\n");
+            switch(action_type)
+            {
+                EOSIO_API(registrynft, (create)(issue)(transfer)(addclaritych)(addinscript)(addcomment))
+            };
 
-//     if (act == N(transfer))
-//     {
-//         transferReceived(unpack_action_data<currency::transfer>(), contract);
-//         return;
-//     }
+        break;
+        //
+        case N(transfer):
 
-//     auto &thiscontract = *this;
+            if( contract == _self)
+            {                
+                switch(action_type)
+                {
+                    EOSIO_API(registrynft, (create)(issue)(transfer)(addclaritych)(addinscript)(addcomment))
+                };
+            }
+            else
+            {
+                //print("transfer--notify() received in registrynft");
+                //print("contract:", contract_code, "act: ", action_type);
+                apply_transfer(unpack_action_data<currency::transfer>(), contract); 
 
-//     switch (act)
-//     {
-//         EOSIO_API(registry, (regdiamond)(addclaritych)(addinscript)(addcomment)(addconfig))
-//     };
-//}
+            }
+        break;
+        //
+        case N(withdraw):
+            if( contract == _self)
+            {
+                //auto &thiscontract = *this;
+                switch(action_type)
+                {
+                    EOSIO_API(registrynft, (create)(issue)(transfer)(addclaritych)(addinscript)(addcomment))
+                };
+            }
+            else
+            {
+                apply_withdrawal(unpack_action_data<withdraw>(), contract);
+            }
+        break;        
+    }
+}
 
-// void registrynft::transferReceived(const currency::transfer &transfer, const account_name code)
-// {
-//     if (transfer.to != _self)
-//     {
-//         return;
-//     }
 
-//     print("Account Name     :   ", name{code}, "\n");
-//     print("From             :   ", name{transfer.from}, "\n");
-//     print("To               :   ", name{transfer.to}, "\n");
-//     print("Asset            :   ", transfer.quantity, "\n");
-//     print("Received Amount  :   ", transfer.quantity.amount, "\n");
-//     print("Received Symbol  :   ", transfer.quantity.symbol, "\n");
-//     print("Memo             :   ", transfer.memo, "\n");
-
-//     config_table c_t(_self, _self);
-//     auto c_itr = c_t.find(0);
-//     print("Expected payment symbol  : ", c_itr->payment_symbol, "\n");
-
-//     eosio_assert(c_itr->payment_symbol == transfer.quantity.symbol, "Payment is not the right symbol.");
-
-//     std::string::size_type sz;
-//     diamond_table d_t (_self, _self);
-//     auto d_itr = d_t.find (std::stoll(transfer.memo, &sz));
-
-//     eosio_assert(d_itr != d_t.end(), "Diamond ID is not found.");
-    
-//     // Do we want to allow transfers from accounts besides the registrant?
-//     //eosio_assert(transfer.from == d_itr->buyer, "Transfer is not from the buyer.");
-
-//     // TODO: add ability to pay for many pending diamonds at once
-//     if (d_itr->registration_cost <= transfer.quantity) {
-//       d_t.modify (d_itr, _self, [&](auto &d) {
-//         d.registration_status   = FINALIZED;
-//       });
+void registrynft::apply_transfer(const currency::transfer &transfer, const account_name code)
+{
+    // validate transfer.from is not the same as transfer.to
+    eosio_assert(transfer.from != transfer.to, "Error: transfer.from and transfer.to accounts cannot be the same!!");
+    //
+    print("Account Name     :   ", name{code}, "\n");
+    print("From             :   ", name{transfer.from}, "\n");
+    print("To               :   ", name{transfer.to}, "\n");
+    print("Asset            :   ", transfer.quantity, "\n");
+    print("Received Amount  :   ", transfer.quantity.amount, "\n");
+    print("Received Symbol  :   ", transfer.quantity.symbol, "\n");
+    print("Memo             :   ", transfer.memo, "\n");
+    //
+    auto symbol_name = transfer.quantity.symbol.name();
+    account_index accounts_table(_self, symbol_name);
+    auto acct_iter = accounts_table.find(symbol_name);
+    asset new_balance;
+    print("Available Balance  : ", acct_iter->balance, "\n");
+    //
+    if(acct_iter != accounts_table.end())
+    {
+        eosio_assert(acct_iter->token_contract == code, "Transfer does not match existing token contract");
+        accounts_table.modify(acct_iter, transfer.from, [&](auto &bal) {
+            bal.balance += transfer.quantity;
+            new_balance = bal.balance;
+        });
+    }
+    else
+    {
+        accounts_table.emplace(transfer.from, [&](auto& bal){
+            bal.balance = transfer.quantity;
+            bal.token_contract = code;
+            new_balance = transfer.quantity;
+        });
+    }
+    //
+    print(name{transfer.from}, " deposited:     ", transfer.quantity, "\n");
+    print(name{transfer.from}, " funds available", new_balance, "\n");
  
-//     }
-// }
+}
 
-//EOSIO_ABI(registrynft, (create)(issue)(transfer)(set_ram_payer)(burn)(addconfig))
+void registrynft::apply_withdrawal(const withdraw& withdrawal, const account_name code)
+{
+    // validate transfer.from is not the same as transfer.to
+    eosio_assert(code != _self, "Withdrawal and code accounts cannot be the same!!");
+    require_auth(withdrawal.user);
+    //
+    account_index accounts_table(_self, withdrawal.wd_symbol);
+    auto acct_iter = accounts_table.find(withdrawal.wd_symbol);
+    asset new_balance;
+    //
+    if(acct_iter == accounts_table.end() )
+    {
+        print(name{withdrawal.user}, " has no funds to withdraw!!", "\n");
+        print("No transfer needed", "\n");
+        return;
 
-// extern "C"
-// {
-//     //using namespace bay;
-//     using namespace eosio;
+    }
+    //
+    print(name{withdrawal.user}, " has no funds to withdraw", "\n");
+    print("Returning all funds", "\n");
+    
+    //
+    action
+    (
+        permission_level{_self, N(active)},
+        code, N(transfer),
+        std::make_tuple(_self, withdrawal.user, acct_iter->balance,"")
+    ).send();
+    accounts_table.erase( acct_iter);
+}
 
-//     void apply(uint64_t receiver, uint64_t code, uint64_t action)
-//     {
-//         auto self = receiver;
-//         registry contract(self);
-//         contract.apply(code, action);
-//         eosio_exit(0);
-//     }
-// }
 
-EOSIO_ABI(registrynft, (create)(issue)(transfer)(setrampayer)(burn)(addclaritych)(addinscript)(addcomment)(addconfig))
+extern "C"
+{
+    using namespace eosio;
+    //
+    void apply(uint64_t receiver, uint64_t code, uint64_t action)
+    {
+        auto self = receiver;
+        registrynft contract(self);
+        contract.apply(code, action);
+        eosio_exit(0);
+    }
+}
+
+//EOSIO_ABI(registrynft,(create)(issue)(transfer)(setrampayer)(burn)(addclaritych)(addinscript)(addcomment))
